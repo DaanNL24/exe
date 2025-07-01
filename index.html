@@ -1,0 +1,325 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EXE Bestandsanalyser</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        .hex-view {
+            font-family: 'Courier New', monospace;
+            background-color: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            overflow-x: auto;
+        }
+        .hex-line {
+            display: flex;
+            margin-bottom: 5px;
+        }
+        .hex-offset {
+            color: #6c757d;
+            margin-right: 15px;
+        }
+        .hex-bytes {
+            display: flex;
+            flex-wrap: wrap;
+            margin-right: 15px;
+        }
+        .hex-byte {
+            margin-right: 2px;
+        }
+        .hex-printable {
+            color: #343a40;
+        }
+        
+        .dropzone {
+            border: 2px dashed #4b5563;
+            transition: all 0.3s ease;
+        }
+        .dropzone.active {
+            border-color: #3b82f6;
+            background-color: rgba(59, 130, 246, 0.1);
+        }
+        
+        .section-title {
+            border-bottom: 2px solid #e5e7eb;
+            padding-bottom: 0.5rem;
+            margin-bottom: 1rem;
+        }
+        
+        .metadata-table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .metadata-table tr:nth-child(even) {
+            background-color: #f9fafb;
+        }
+        .metadata-table td {
+            padding: 0.5rem;
+            border-bottom: 1px solid #e5e7eb;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen">
+    <div class="container mx-auto px-4 py-8">
+        <header class="text-center mb-12">
+            <div class="flex justify-center mb-6">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16 text-blue-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z" />
+                </svg>
+            </div>
+            <h1 class="text-3xl font-bold text-gray-800 mb-2">EXE Bestandsanalyser</h1>
+            <p class="text-gray-600">Upload een .exe-bestand om de inhoud te analyseren (geen uitvoering)</p>
+        </header>
+        
+        <div class="bg-white rounded-lg shadow-md p-6 mb-8">
+            <div id="dropzone" class="dropzone rounded-lg p-12 text-center cursor-pointer mb-6">
+                <div class="flex flex-col items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-12 w-12 text-gray-400 mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                    </svg>
+                    <p class="text-lg font-medium text-gray-700 mb-1">Sleep je .exe-bestand hierheen</p>
+                    <p class="text-sm text-gray-500">OF klik om bestand te selecteren</p>
+                </div>
+                <input type="file" id="fileInput" class="hidden" accept=".exe" />
+            </div>
+            
+            <div id="fileInfo" class="hidden">
+                <div class="flex items-start mb-6">
+                    <div class="mr-4">
+                        <img src="https://placehold.co/100" alt="Windows executable file icon with default white document and blue title bar" class="w-16 h-16 object-contain" />
+                    </div>
+                    <div>
+                        <h2 class="text-xl font-semibold text-gray-800" id="fileName">Bestandsnaam</h2>
+                        <div class="flex flex-wrap gap-2 mt-1">
+                            <span class="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded">EXE</span>
+                            <span class="bg-gray-100 text-gray-800 text-xs px-2 py-1 rounded" id="fileSize">0 KB</span>
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="mb-8">
+                    <h3 class="text-lg font-medium text-gray-900 section-title">Bestandsinformatie</h3>
+                    <div class="overflow-x-auto">
+                        <table class="metadata-table">
+                            <tbody id="metadataTable">
+                                <!-- Metadata rows will be added here -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+                
+                <div class="mb-8">
+                    <h3 class="text-lg font-medium text-gray-900 section-title">Hex Preview</h3>
+                    <div id="hexPreview" class="hex-view">
+                        <!-- Hex content will be shown here -->
+                        <p class="text-gray-500 text-center">Selecteer eerst een bestand om de hex-weergave te zien</p>
+                    </div>
+                </div>
+                
+                <div id="warningBox" class="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-8 hidden">
+                    <div class="flex items-center">
+                        <div class="flex-shrink-0">
+                            <svg class="h-5 w-5 text-yellow-400" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd" />
+                            </svg>
+                        </div>
+                        <div class="ml-3">
+                            <p class="text-sm text-yellow-700">
+                                <span class="font-semibold">Waarschuwing:</span> Het analyseren van onbekende .exe-bestanden kan een beveiligingsrisico inhouden. Voer nooit onbekende .exe-bestanden uit.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <footer class="text-center text-gray-500 text-sm mt-8">
+            <p>Deze tool analyseert alleen de inhoud van .exe-bestanden en voert ze niet uit.</p>
+        </footer>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const dropzone = document.getElementById('dropzone');
+            const fileInput = document.getElementById('fileInput');
+            const fileInfo = document.getElementById('fileInfo');
+            const fileName = document.getElementById('fileName');
+            const fileSize = document.getElementById('fileSize');
+            const metadataTable = document.getElementById('metadataTable');
+            const hexPreview = document.getElementById('hexPreview');
+            const warningBox = document.getElementById('warningBox');
+            
+            let currentFile = null;
+            
+            // Handle drag and drop events
+            ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+                dropzone.addEventListener(eventName, preventDefaults, false);
+            });
+            
+            function preventDefaults(e) {
+                e.preventDefault();
+                e.stopPropagation();
+            }
+            
+            ['dragenter', 'dragover'].forEach(eventName => {
+                dropzone.addEventListener(eventName, highlight, false);
+            });
+            
+            ['dragleave', 'drop'].forEach(eventName => {
+                dropzone.addEventListener(eventName, unhighlight, false);
+            });
+            
+            function highlight() {
+                dropzone.classList.add('active');
+            }
+            
+            function unhighlight() {
+                dropzone.classList.remove('active');
+            }
+            
+            // Handle drop
+            dropzone.addEventListener('drop', handleDrop, false);
+            dropzone.addEventListener('click', () => fileInput.click());
+            
+            fileInput.addEventListener('change', handleFiles);
+            
+            function handleDrop(e) {
+                const dt = e.dataTransfer;
+                const files = dt.files;
+                handleFiles({ target: { files } });
+            }
+            
+            function handleFiles(e) {
+                const files = e.target.files;
+                if (files.length === 0) return;
+                
+                const file = files[0];
+                if (!file.name.toLowerCase().endsWith('.exe')) {
+                    alert('Selecteer alstublieft een .exe-bestand');
+                    return;
+                }
+                
+                currentFile = file;
+                processFile(file);
+            }
+            
+            function processFile(file) {
+                // Show file info
+                fileName.textContent = file.name;
+                fileSize.textContent = formatFileSize(file.size);
+                
+                // Show warning box
+                warningBox.classList.remove('hidden');
+                
+                // Show file info section
+                fileInfo.classList.remove('hidden');
+                
+                // Extract and display metadata
+                displayMetadata(file);
+                
+                // Read and display hex preview
+                displayHexPreview(file);
+            }
+            
+            function formatFileSize(bytes) {
+                if (bytes === 0) return '0 Bytes';
+                const k = 1024;
+                const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+                const i = Math.floor(Math.log(bytes) / Math.log(k));
+                return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+            }
+            
+            function displayMetadata(file) {
+                metadataTable.innerHTML = '';
+                
+                const fileMetadata = [
+                    { name: 'Bestandsnaam', value: file.name },
+                    { name: 'Bestandstype', value: 'PE Executable (EXE)' },
+                    { name: 'Bestandsgrootte', value: formatFileSize(file.size) },
+                    { name: 'Laatst aangepast', value: new Date(file.lastModified).toLocaleString() },
+                    { name: 'MIME-type', value: file.type || 'application/vnd.microsoft.portable-executable' }
+                ];
+                
+                fileMetadata.forEach(item => {
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td class="font-medium text-gray-700">${item.name}</td>
+                        <td class="text-gray-600">${item.value}</td>
+                    `;
+                    metadataTable.appendChild(row);
+                });
+            }
+            
+            function displayHexPreview(file) {
+                const reader = new FileReader();
+                
+                reader.onload = function(e) {
+                    const arrayBuffer = e.target.result;
+                    const uint8Array = new Uint8Array(arrayBuffer);
+                    
+                    // Only show first 1024 bytes for performance
+                    const previewBytes = 1024;
+                    const totalBytes = Math.min(uint8Array.length, previewBytes);
+                    
+                    hexPreview.innerHTML = '';
+                    
+                    const bytesPerLine = 16;
+                    
+                    for (let i = 0; i < totalBytes; i += bytesPerLine) {
+                        const lineBytes = Math.min(bytesPerLine, totalBytes - i);
+                        
+                        const lineDiv = document.createElement('div');
+                        lineDiv.className = 'hex-line';
+                        
+                        // Add offset
+                        const offsetSpan = document.createElement('span');
+                        offsetSpan.className = 'hex-offset';
+                        offsetSpan.textContent = i.toString(16).padStart(8, '0');
+                        lineDiv.appendChild(offsetSpan);
+                        
+                        // Add hex bytes
+                        const bytesDiv = document.createElement('div');
+                        bytesDiv.className = 'hex-bytes';
+                        
+                        for (let j = 0; j < lineBytes; j++) {
+                            const byteSpan = document.createElement('span');
+                            byteSpan.className = 'hex-byte';
+                            byteSpan.textContent = uint8Array[i + j].toString(16).padStart(2, '0');
+                            bytesDiv.appendChild(byteSpan);
+                        }
+                        
+                        lineDiv.appendChild(bytesDiv);
+                        
+                        // Add printable characters
+                        const printableDiv = document.createElement('div');
+                        printableDiv.className = 'hex-printable';
+                        
+                        for (let j = 0; j < lineBytes; j++) {
+                            const charCode = uint8Array[i + j];
+                            printableDiv.textContent += (charCode >= 32 && charCode <= 126) 
+                                ? String.fromCharCode(charCode) 
+                                : '.';
+                        }
+                        
+                        lineDiv.appendChild(printableDiv);
+                        hexPreview.appendChild(lineDiv);
+                    }
+                    
+                    if (uint8Array.length > previewBytes) {
+                        const truncatedMsg = document.createElement('div');
+                        truncatedMsg.className = 'text-gray-500 text-sm mt-3';
+                        truncatedMsg.textContent = `Er is ${
+                            uint8Array.length - previewBytes
+                        } bytes niet weergegeven.`;
+                        hexPreview.appendChild(truncatedMsg);
+                    }
+                };
+                
+                reader.readAsArrayBuffer(file.slice(0, 1024));
+            }
+        });
+    </script>
+</body>
+</html>
